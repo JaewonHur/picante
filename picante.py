@@ -208,6 +208,20 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
 
     transcribe = TRANSCRIBERS[transcriber]
 
+    def go_transcribe(sounds: np.array):
+
+        out = io.BytesIO()
+        out.name = 'out.wav'
+
+        sf.write(out, sounds, samplerate=SAMPLE_RATE, format='wav')
+        out.seek(0)
+
+        transcript, delay = transcribe(out)
+        dprint(f"[{transcriber}] delay: {delay:.2f} | {transcript}")
+
+        dest.put(transcript)
+
+
     CONVERT.get()
 
     print(f'[*]   Convert sounds...\n' + 
@@ -215,24 +229,28 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
     CONTROL.put(True)
 
     TIMEOUT=1
+    transcribe_threads = []
     while not stopped:
         try:
             sounds = src.get(timeout=TIMEOUT)
         except queue.Empty:
+            for t in transcribe_threads:
+                t.join()
+
+            transcribe_threads.clear()
+
             continue
 
         sounds = np.concatenate(sounds)
 
-        out = io.BytesIO()
-        out.name = 'out.wav'
-        sf.write(out, sounds, samplerate=SAMPLE_RATE, format='wav')
+        t = threading.Thread(target=go_transcribe,
+                             args=(sounds,))
+        transcribe_threads.append(t)
+        t.start()
 
-        out.seek(0)
+    for t in transcribe_threads:
+        t.join()
 
-        transcript, delay = transcribe(out)
-
-        dprint(f"[{transcriber}] delay: {delay:.2f} | {transcript}")
-        dest.put(transcript)
 
 def control_arduino(src: queue.Queue, debug: str):
     CONTROL.get()
