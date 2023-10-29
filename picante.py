@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import openai
+import requests, json
 import click, threading, queue, pyaudio, audioop, time, io, signal, sys, os
 import sounddevice as sd
 import soundfile as sf
@@ -10,9 +11,9 @@ from math import log10
 
 ################### Global Parameters #########################################
 
-SOUND_THRESHOLD = -50
+SOUND_THRESHOLD = -45
 MAX_BINS=1000
-DUMP_INTERVAL=1
+DUMP_INTERVAL=0.5
 MAX_SOUND_LENGTH = 10
 
 ###############################################################################
@@ -54,6 +55,49 @@ def dprint_constructor(func: str, debug: str):
         dprint = lambda s: None
 
     return dprint
+
+################### Transcribers ##############################################
+
+def naver_transcribe(out: io.BytesIO):
+    Lang = "Kor"
+    URL = "https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=" + Lang
+
+    ID = os.environ["NAVER_CLIENT_ID"]
+    SECRET = os.environ["NAVER_CLIENT_SECRET"]
+
+    headers = {
+        "Content-Type": "application/octet-stream",
+        "X-NCP-APIGW-API-KEY-ID": ID,
+        "X-NCP-APIGW-API-KEY": SECRET,
+    }
+
+    start = time.time()
+    response = requests.post(URL, data=out, headers=headers)
+    delay = time.time() - start
+
+    rescode = response.status_code
+
+    if (rescode == 200):
+        return json.loads(response.text)["text"], delay
+    else:
+        raise Exception(f"Naver api error: {rescode}")
+
+
+def openai_transcribe(out: io.BytesIO):
+    start = time.time()
+    transcript = openai.Audio.transcribe('whisper-1', out)
+    delay = time.time() - start
+
+    return transcript['text'], delay
+
+
+TRANSCRIBERS = {
+    'openai': openai_transcribe,
+    'naver': naver_transcribe
+}
+
+###########################################################################
+
 
 def stream_sound(dest: queue.Queue, debug: str):
 
@@ -158,14 +202,16 @@ def stream_sound(dest: queue.Queue, debug: str):
     p.terminate()
 
 
-def convert_sound(src: queue.Queue, dest: queue.Queue, debug: str):
-
+def convert_sound(src: queue.Queue, dest: queue.Queue, 
+                  transcriber: str, debug: str):
     dprint = dprint_constructor('convert', debug)
+
+    transcribe = TRANSCRIBERS[transcriber]
 
     CONVERT.get()
 
     print(f'[*]   Convert sounds...\n' + 
-          f'        using whisper-AI\n')
+          f'        using {transcriber}\n')
     CONTROL.put(True)
 
     TIMEOUT=1
@@ -182,12 +228,11 @@ def convert_sound(src: queue.Queue, dest: queue.Queue, debug: str):
         sf.write(out, sounds, samplerate=SAMPLE_RATE, format='wav')
 
         out.seek(0)
-        transcript = openai.Audio.transcribe('whisper-1', out)
 
-        dprint(transcript['text'])
+        transcript, delay = transcribe(out)
 
-        dest.put(transcript['text'])
-
+        dprint(f"[{transcriber}] delay: {delay:.2f} | {transcript}")
+        dest.put(transcript)
 
 def control_arduino(src: queue.Queue, debug: str):
     CONTROL.get()
@@ -197,17 +242,28 @@ def control_arduino(src: queue.Queue, debug: str):
 
 
 @click.command()
+@click.option('--transcriber', '-t', default='openai',
+              type=click.Choice(['openai', 'naver']),
+              help='Transcript service to use from')
 @click.option('--debug', '-d', default=None, 
               type=click.Choice(['all', 'stream', 'convert', 'control']), 
               help='Debug option for PICANTE')
-def main(debug):
+def main(transcriber, debug):
     print('[*] Hello PICANTE!')
 
-    if not 'OPENAI_API_KEY' in os.environ:
-        print('[-] You should set OPENAI_API_KEY to run PICANTE!\n' +
-              '      Please run "export OPENAI_API_KEY=<openai-api-key>"')
+    if transcriber == 'openai':
+        if not 'OPENAI_API_KEY' in os.environ:
+            print('[-] You should set OPENAI_API_KEY to run PICANTE!\n' +
+                  '      Please run "export OPENAI_API_KEY=<openai-api-key>"')
 
-        sys.exit(1)
+            sys.exit(1)
+    elif transcriber == 'naver':
+        if ((not 'NAVER_CLIENT_ID' in os.environ) or 
+            (not 'NAVER_CLIENT_SECRET' in os.environ)):
+            print('[-] You should set NAVER_CLIENT_ID, NAVER_CLIENT_SECRET to run PICANTE!\n' +
+                        'Please run "export NAVER_CLIENT_ID=<naver-client-id>\n"' +
+                        'Please run "export NAVER_CLIENT_SECRET=<naver-client-secret>\n"')
+            sys.exit(1)
 
     signal.signal(signal.SIGINT, sigint_handler)
 
@@ -219,7 +275,7 @@ def main(debug):
     streamer.start()
 
     converter = threading.Thread(target=convert_sound, 
-                                 args=(sound_queue, text_queue, debug))
+                                 args=(sound_queue, text_queue, transcriber, debug))
     converter.start()
 
     controller = threading.Thread(target=control_arduino, 
