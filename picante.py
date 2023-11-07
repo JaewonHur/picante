@@ -220,11 +220,12 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
         sf.write(out, sounds, samplerate=SAMPLE_RATE, format='wav')
         out.seek(0)
 
-        transcript, delay = transcribe(out)
-        dprint(f"[{transcriber}] delay: {delay:.2f} | {transcript}")
-
-        dest.put(transcript)
-
+        try:
+            transcript, delay = transcribe(out)
+            dprint(f"[{transcriber}] delay: {delay:.2f} | {transcript}")
+            dest.put(transcript)
+        except openai.error.RateLimiteError:
+            print('openai rate limit reached!')
 
     CONVERT.get()
 
