@@ -274,7 +274,7 @@ def control_arduino(src: queue.Queue, debug: str):
     ]
 
     CHOSUNG_TO_LIGHT_NUM = {
-        "ㅅ": 6,
+        "ㅅ": 0,
         "ㅌ": 1,
         "ㅋ": 2,
         "ㅍ": 3,
@@ -289,7 +289,7 @@ def control_arduino(src: queue.Queue, debug: str):
         "ㅁ": 12,
         "ㅈ": 13,
         "ㅃ": 9,
-        "ㅆ": 6,
+        "ㅆ": 0,
         "ㄲ": 10,
         "ㅉ": 13,
     }
