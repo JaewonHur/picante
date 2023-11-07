@@ -329,6 +329,7 @@ def control_arduino(src: queue.Queue, debug: str):
                                        if c in HIGH_FREQ_CHOSUNGS))
         dprint(f'chosungs: {chosungs}')
         dprint(f'high_freq_chosungs: {high_freq_chosungs}')
+        print(f'{" ".join(chosungs)}')
 
         light_nums = [i[1] for i in high_freq_chosungs]
 
