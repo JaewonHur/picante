@@ -224,8 +224,13 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
             transcript, delay = transcribe(out)
             dprint(f"[{transcriber}] delay: {delay:.2f} | {transcript}")
             dest.put(transcript)
-        except openai.error.RateLimiteError:
-            print('openai rate limit reached!')
+
+        except openai.error.RateLimitError:
+            now = time.time()
+            dprint(f'[{now:.0f}] OpenAI rate limit reached!')
+
+        except Exception as e:
+            dprint(e)
 
     CONVERT.get()
 
