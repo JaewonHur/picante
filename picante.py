@@ -88,8 +88,12 @@ def naver_transcribe(out: io.BytesIO):
         raise Exception(f"Naver api error: {rescode}")
 
 
+openai_api_keys = []
 def openai_transcribe(out: io.BytesIO):
     start = time.time()
+    key = openai_api_keys[int(start) % len(openai_api_keys)]
+    openai.api_key = key
+
     transcript = openai.Audio.transcribe('whisper-1', out)
     delay = time.time() - start
 
@@ -349,11 +353,15 @@ def main(transcriber, debug):
     print('[*] Hello PICANTE!')
 
     if transcriber == 'openai':
-        if not 'OPENAI_API_KEY' in os.environ:
-            print('[-] You should set OPENAI_API_KEY to run PICANTE!\n' +
-                  '      Please run "export OPENAI_API_KEY=<openai-api-key>"')
+        if not 'OPENAI_API_KEYS' in os.environ:
+            print('[-] You should set OPENAI_API_KEYS to run PICANTE!\n' +
+                  '      Please run "export OPENAI_API_KEYS=<openai-api-key>"')
 
             sys.exit(1)
+
+        for key in os.environ['OPENAI_API_KEYS'].split(','):
+            openai_api_keys.append(key)
+
     elif transcriber == 'naver':
         if ((not 'NAVER_CLIENT_ID' in os.environ) or 
             (not 'NAVER_CLIENT_SECRET' in os.environ)):
