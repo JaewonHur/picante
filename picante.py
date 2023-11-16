@@ -97,6 +97,7 @@ def openai_transcribe(out: io.BytesIO):
 
     openai.api_key = key
 
+    print(f'openai transcribe using {key}...')
     transcript = openai.Audio.transcribe('whisper-1', out)
     delay = time.time() - start
 
