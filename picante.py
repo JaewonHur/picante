@@ -253,11 +253,14 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
         try:
             sounds = src.get(timeout=TIMEOUT)
         except queue.Empty:
+            print('queue is empty')
+
             for t in transcribe_threads:
                 t.join()
 
             transcribe_threads.clear()
 
+            print('continue')
             continue
 
         sounds = np.concatenate(sounds)
