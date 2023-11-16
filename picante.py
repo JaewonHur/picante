@@ -91,6 +91,8 @@ def naver_transcribe(out: io.BytesIO):
 openai_api_keys = []
 cnt = 0
 def openai_transcribe(out: io.BytesIO):
+    global cnt
+
     start = time.time()
     key = openai_api_keys[cnt % len(openai_api_keys)]
     cnt += 1
