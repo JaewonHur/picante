@@ -223,6 +223,9 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
 
     transcribe = TRANSCRIBERS[transcriber]
 
+    done = [False]
+    transcribe_threads = queue.Queue()
+
     def go_transcribe(sounds: np.array):
         out = io.BytesIO()
         out.name = 'out.wav'
@@ -242,24 +245,29 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
         except Exception as e:
             dprint(e)
 
+    def reap_threads():
+        while not done[0]:
+            try:
+                t = transcribe_threads.get(timeout=TIMEOUT)
+                t.join()
+            except queue.Empty:
+                continue
+
+
     CONVERT.get()
 
     print(f'[*]   Convert sounds...\n' + 
           f'        using {transcriber}\n')
     CONTROL.put(True)
 
-    transcribe_threads = []
+    reaper = threading.Thread(target=reap_threads,
+                              args=())
+    reaper.start()
     while not stopped:
         try:
             sounds = src.get(timeout=TIMEOUT)
         except queue.Empty:
             print('queue is empty')
-
-            for t in transcribe_threads:
-                t.join()
-
-            transcribe_threads.clear()
-
             print('continue')
             continue
 
@@ -267,11 +275,11 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
 
         t = threading.Thread(target=go_transcribe,
                              args=(sounds,))
-        transcribe_threads.append(t)
+        transcribe_threads.put(t)
         t.start()
 
-    for t in transcribe_threads:
-        t.join()
+    done[0] = True
+    reaper.join()
 
 
 def control_arduino(src: queue.Queue, debug: str):
