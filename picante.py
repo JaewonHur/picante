@@ -318,6 +318,15 @@ def control_arduino(src: queue.Queue, debug: str):
         'ㅍ', 'ㅈ', 'ㅆ', 'ㅉ',
     ]
 
+    def filter_text(s: str):
+
+        ret = False
+        ret |= '이덕영'       in s
+        ret |= 'MBC 뉴스'     in s
+        ret |= '시청해주셔서' in s
+
+        return ret
+
     def get_chosungs(s: str):
         chosungs = []
         for w in list(s.strip()):
@@ -340,6 +349,9 @@ def control_arduino(src: queue.Queue, debug: str):
         try:
             text = src.get(timeout=TIMEOUT)
         except queue.Empty:
+            continue
+
+        if filter_text(text):
             continue
 
         chosungs = get_chosungs(text)
