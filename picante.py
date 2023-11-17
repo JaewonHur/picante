@@ -99,7 +99,6 @@ def openai_transcribe(out: io.BytesIO):
 
     openai.api_key = key
 
-    print(f'openai transcribe using {key}...')
     transcript = openai.Audio.transcribe('whisper-1', out)
     delay = time.time() - start
 
@@ -267,16 +266,15 @@ def convert_sound(src: queue.Queue, dest: queue.Queue,
         try:
             sounds = src.get(timeout=TIMEOUT)
         except queue.Empty:
-            print('queue is empty')
-            print('continue')
             continue
 
         sounds = np.concatenate(sounds)
 
         t = threading.Thread(target=go_transcribe,
                              args=(sounds,))
-        transcribe_threads.put(t)
         t.start()
+
+        transcribe_threads.put(t)
 
     done[0] = True
     reaper.join()
